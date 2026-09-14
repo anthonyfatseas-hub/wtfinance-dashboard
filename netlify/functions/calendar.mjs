@@ -77,16 +77,37 @@ function interviewPayload(events) {
   }).filter((e) => e.guest);
 }
 
+async function fetchCalendarFeed(icalUrl) {
+  const upstream = await fetch(icalUrl, { headers: { 'User-Agent': 'WTFinance-Dashboard/0.6' } });
+  if (!upstream.ok) throw new Error(`Google Calendar feed returned ${upstream.status}`);
+  const text = await upstream.text();
+  const events = interviewPayload(parseIcal(text));
+  return { events, bytes: text.length };
+}
+
 export default async (request) => {
   const url = new URL(request.url);
   const icalUrl = process.env.GOOGLE_CALENDAR_ICAL_URL || '';
 
   if (url.pathname.endsWith('/health')) {
-    return Response.json({
-      ok: Boolean(icalUrl),
-      mode: 'ical',
-      message: icalUrl ? 'Google Calendar iCal feed configured' : 'Calendar feed not configured',
-    });
+    if (!icalUrl) {
+      return Response.json({ ok: false, mode: 'ical', message: 'Calendar feed not configured' }, { status: 503 });
+    }
+    try {
+      const { events } = await fetchCalendarFeed(icalUrl);
+      return Response.json({
+        ok: true,
+        mode: 'ical',
+        message: 'Google Calendar iCal feed reachable',
+        interviewCount: events.length,
+      }, { headers: { 'Cache-Control': 'no-store' } });
+    } catch (error) {
+      return Response.json({
+        ok: false,
+        mode: 'ical',
+        message: error?.message || 'Calendar feed check failed',
+      }, { status: 502, headers: { 'Cache-Control': 'no-store' } });
+    }
   }
 
   if (!icalUrl) {
@@ -94,14 +115,12 @@ export default async (request) => {
   }
 
   try {
-    const upstream = await fetch(icalUrl, { headers: { 'User-Agent': 'WTFinance-Dashboard/0.6' } });
-    if (!upstream.ok) throw new Error(`Google Calendar feed returned ${upstream.status}`);
-    const text = await upstream.text();
+    const { events } = await fetchCalendarFeed(icalUrl);
     return Response.json({
       ok: true,
       source: 'google-calendar-ical',
       fetchedAt: new Date().toISOString(),
-      events: interviewPayload(parseIcal(text)),
+      events,
     }, { headers: { 'Cache-Control': 'no-store' } });
   } catch (error) {
     return Response.json({ ok: false, error: error?.message || 'Calendar fetch failed' }, { status: 502 });
