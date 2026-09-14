@@ -58,7 +58,7 @@ function parseIcal(text) {
         return { email: mail, name: unescapeIcal(cn) };
       });
     const blob = lines.join('\n');
-    const streamyard = blob.match(/https?:\\?\/\\?\/streamyard\.com\/[^^\s\\<>\"]+/i)?.[0] || '';
+    const streamyard = blob.match(/https?:\\?\/\\?\/streamyard\.com\/[^\s\\<>"']+/i)?.[0] || '';
     const externalId = unescapeIcal(get('UID')?.split(':').slice(1).join(':') || '');
     return { summary, date, startAt, attendees, link: streamyard.replace(/\\/g, ''), externalId };
   }).filter((e) => /WTFinance Interview\s*$/i.test(e.summary));
@@ -89,7 +89,7 @@ async function calendarHandler(res) {
     return;
   }
   try {
-    const upstream = await fetch(ICAL_URL, { headers: { 'User-Agent': 'WTFinance-Dashboard/0.2' } });
+    const upstream = await fetch(ICAL_URL, { headers: { 'User-Agent': 'WTFinance-Dashboard/0.6' } });
     if (!upstream.ok) throw new Error(`Google Calendar feed returned ${upstream.status}`);
     const text = await upstream.text();
     const events = interviewPayload(parseIcal(text));
