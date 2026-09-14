@@ -38,3 +38,5 @@ Publish directory: `dist`
 Functions directory: `netlify/functions`
 
 Connect the GitHub repository to Netlify on the `main` branch so every push automatically deploys a new version.
+
+The repository is configured to trigger a production deployment on every push to `main`.
