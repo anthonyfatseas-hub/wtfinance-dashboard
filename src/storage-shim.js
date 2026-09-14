@@ -124,3 +124,23 @@ function applyDnD() {
 const observer = new MutationObserver(applyDnD);
 observer.observe(document.documentElement, { childList: true, subtree: true });
 setTimeout(applyDnD, 500);
+
+// Calendar stays current without requiring a manual button press. This is a UI-level
+// bridge for the current app architecture: it invokes the existing server-side sync
+// every 10 minutes and when the tab becomes active.
+let lastCalendarTrigger = 0;
+function triggerCalendarSync(force = false) {
+  const now = Date.now();
+  if (!force && now - lastCalendarTrigger < 9 * 60 * 1000) return;
+  const button = [...document.querySelectorAll("button")].find((b) => /^(Update Now|Sync Calendar)$/.test(b.textContent?.trim()));
+  if (!button || button.disabled) return;
+  lastCalendarTrigger = now;
+  button.click();
+}
+
+const calendarSyncObserver = new MutationObserver(() => {
+  if (document.visibilityState === "visible") triggerCalendarSync();
+});
+calendarSyncObserver.observe(document.documentElement, { childList: true, subtree: true });
+setTimeout(() => triggerCalendarSync(true), 2500);
+window.addEventListener("focus", () => triggerCalendarSync(true));
