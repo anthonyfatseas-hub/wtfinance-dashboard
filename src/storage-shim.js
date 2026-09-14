@@ -1,5 +1,4 @@
-// Local persistence shim plus lightweight Schedule drag-and-drop.
-// Schedule DnD updates the same localStorage record used by the dashboard.
+// Local persistence shim plus robust Schedule drag-and-drop.
 if (!window.storage) {
   window.storage = {
     async get(key) {
@@ -20,103 +19,108 @@ if (!window.storage) {
 const DND_KEY = "wtf_pipeline_v8";
 const DND_DAYS = ["SUN", "MON", "TUE", "WED", "THU", "FRI", "SAT"];
 
-function monday(date) {
+const monday = (date) => {
   const x = new Date(date);
   x.setHours(0, 0, 0, 0);
   const day = x.getDay();
   x.setDate(x.getDate() - (day === 0 ? 6 : day - 1));
   return x;
-}
-function addDays(date, n) {
-  const x = new Date(date);
-  x.setDate(x.getDate() + n);
-  return x;
-}
-function iso(date) {
-  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
-}
-function dayOffset(label) {
-  return DND_DAYS.indexOf(label);
-}
+};
+const addDays = (date, n) => { const x = new Date(date); x.setDate(x.getDate() + n); return x; };
+const iso = (date) => `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
 
-function getScheduleRoot() {
+function findSchedule() {
   const marker = [...document.querySelectorAll("div")].find((el) => el.textContent?.trim() === "Monday, Wednesday, Friday. Ten weeks out.");
   return marker?.parentElement || null;
 }
 
-function scheduleRows(root) {
+function getRows(root) {
   if (!root) return [];
-  return [...root.children].flatMap((week) => {
-    const slotColumn = [...week.children].find((child) => child.children?.length === 3);
-    return slotColumn ? [...slotColumn.children] : [];
+  return [...root.querySelectorAll("div")].filter((el) => {
+    if (el.parentElement?.parentElement?.parentElement !== root) return false;
+    const first = el.querySelector(":scope > span");
+    return first && DND_DAYS.includes(first.textContent?.trim());
   });
 }
 
-function rowDate(row, root) {
+function getDate(row) {
   const week = row.parentElement?.parentElement;
   if (!week) return null;
-  const weekIndex = [...root.children].indexOf(week) - 1;
+  const root = week.parentElement;
+  const weeks = [...root.children].filter((el) => [...el.children].some((c) => [...c.children].some((x) => DND_DAYS.includes(x.querySelector?.(":scope > span")?.textContent?.trim()))));
+  const weekIndex = weeks.indexOf(week);
   if (weekIndex < 0) return null;
-  const label = row.querySelector("span")?.textContent?.trim();
-  const offset = dayOffset(label);
-  if (offset < 0) return null;
-  return iso(addDays(monday(new Date()), weekIndex * 7 + offset));
+  const label = row.querySelector(":scope > span")?.textContent?.trim();
+  const dayOffset = DND_DAYS.indexOf(label);
+  return dayOffset < 0 ? null : iso(addDays(monday(new Date()), weekIndex * 7 + dayOffset));
 }
 
-function guestFromRow(row) {
+function guest(row) {
   const spans = [...row.querySelectorAll("span")];
-  const guest = spans.find((s) => s.style.flex?.includes("1"));
-  return guest?.textContent?.replace(/^★\s*/, "").trim() || "";
+  return spans.find((s) => s.style.flex)?.textContent?.replace(/^★\s*/, "").trim() || "";
 }
 
-function enableScheduleDnD() {
-  const root = getScheduleRoot();
+function applyDnD() {
+  const root = findSchedule();
   if (!root || root.dataset.dndReady === "1") return;
+  const rows = getRows(root);
+  if (!rows.length) return;
   root.dataset.dndReady = "1";
-  const rows = scheduleRows(root);
+  let draggedDate = null;
+
   rows.forEach((row) => {
-    const date = rowDate(row, root);
+    const date = getDate(row);
     if (!date) return;
     row.dataset.scheduleDate = date;
-    row.draggable = Boolean(guestFromRow(row));
-    row.style.transition = "opacity .12s, outline .12s, background .12s";
+    const hasGuest = Boolean(guest(row));
+    if (!hasGuest) return;
+    row.draggable = true;
+    row.style.cursor = "grab";
     row.addEventListener("dragstart", (event) => {
-      if (!guestFromRow(row)) return;
+      draggedDate = row.dataset.scheduleDate;
       event.dataTransfer.effectAllowed = "move";
-      event.dataTransfer.setData("text/plain", date);
+      event.dataTransfer.setData("text/plain", draggedDate);
       row.style.opacity = "0.45";
     });
-    row.addEventListener("dragend", () => { row.style.opacity = ""; });
-    row.addEventListener("dragover", (event) => {
-      event.preventDefault();
-      event.dataTransfer.dropEffect = "move";
-      row.style.outline = "2px solid #F5C542";
+    row.addEventListener("dragend", () => {
+      draggedDate = null;
+      row.style.opacity = "";
+      rows.forEach((r) => { r.style.outline = ""; });
     });
-    row.addEventListener("dragleave", () => { row.style.outline = ""; });
-    row.addEventListener("drop", (event) => {
-      event.preventDefault();
-      row.style.outline = "";
-      const fromDate = event.dataTransfer.getData("text/plain");
-      const toDate = row.dataset.scheduleDate;
-      if (!fromDate || !toDate || fromDate === toDate) return;
-      try {
-        const raw = localStorage.getItem(DND_KEY);
-        if (!raw) return;
-        const data = JSON.parse(raw);
-        const source = data.episodes?.find((e) => e.publish === fromDate);
-        if (!source) return;
-        const target = data.episodes?.find((e) => e.publish === toDate);
-        if (target && target.id !== source.id) target.publish = fromDate;
-        source.publish = toDate;
-        localStorage.setItem(DND_KEY, JSON.stringify(data));
-        window.location.reload();
-      } catch (error) {
-        console.error("Schedule drag-and-drop failed", error);
-      }
-    });
+  });
+
+  root.addEventListener("dragover", (event) => {
+    const row = event.target.closest?.("[data-schedule-date]");
+    if (!row || !draggedDate) return;
+    event.preventDefault();
+    event.dataTransfer.dropEffect = "move";
+    row.style.outline = "2px solid #F5C542";
+  });
+
+  root.addEventListener("drop", (event) => {
+    const row = event.target.closest?.("[data-schedule-date]");
+    if (!row || !draggedDate) return;
+    event.preventDefault();
+    rows.forEach((r) => { r.style.outline = ""; });
+    const toDate = row.dataset.scheduleDate;
+    if (!toDate || toDate === draggedDate) return;
+    try {
+      const raw = localStorage.getItem(DND_KEY);
+      const data = raw ? JSON.parse(raw) : null;
+      if (!data?.episodes) return;
+      const source = data.episodes.find((e) => e.publish === draggedDate);
+      if (!source) return;
+      const target = data.episodes.find((e) => e.publish === toDate);
+      if (target && target.id !== source.id) target.publish = draggedDate;
+      source.publish = toDate;
+      localStorage.setItem(DND_KEY, JSON.stringify(data));
+      window.location.reload();
+    } catch (error) {
+      console.error("Schedule drag-and-drop failed", error);
+    }
   });
 }
 
-const observer = new MutationObserver(() => enableScheduleDnD());
+const observer = new MutationObserver(applyDnD);
 observer.observe(document.documentElement, { childList: true, subtree: true });
-setTimeout(enableScheduleDnD, 300);
+setTimeout(applyDnD, 500);
