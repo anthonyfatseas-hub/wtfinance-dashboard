@@ -1,0 +1,24 @@
+[build]
+  command = "npm run build"
+  publish = "dist"
+  functions = "netlify/functions"
+
+[[redirects]]
+  from = "/api/calendar"
+  to = "/.netlify/functions/calendar"
+  status = 200
+
+[[redirects]]
+  from = "/api/calendar/health"
+  to = "/.netlify/functions/calendar/health"
+  status = 200
+
+[[redirects]]
+  from = "/api/prep"
+  to = "/.netlify/functions/prep"
+  status = 200
+
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200
