@@ -50,7 +50,7 @@ function parseIcal(text) {
         name: unescapeIcal(x.match(/(?:^|;)CN=([^;:]+)/i)?.[1] || ''),
       }));
     const blob = lines.join('\n');
-    const streamyard = blob.match(/https?:\\?\/\\?\/streamyard\.com\/[^^\s\\<>"']+/i)?.[0] || '';
+    const streamyard = blob.match(/https?:\\?\/\\?\/streamyard\.com\/[^\s\\<>"']+/i)?.[0] || '';
     return {
       summary,
       date: startLine ? decodeDate(startLine) : '',
@@ -94,7 +94,7 @@ export default async (request) => {
   }
 
   try {
-    const upstream = await fetch(icalUrl, { headers: { 'User-Agent': 'WTFinance-Dashboard/0.4' } });
+    const upstream = await fetch(icalUrl, { headers: { 'User-Agent': 'WTFinance-Dashboard/0.6' } });
     if (!upstream.ok) throw new Error(`Google Calendar feed returned ${upstream.status}`);
     const text = await upstream.text();
     return Response.json({
