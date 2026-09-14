@@ -5,10 +5,12 @@ Standalone WTFinance content dashboard. Podcast preparation runs through a serve
 ## Current state
 
 - Podcast Schedule, Pipeline, Prior Guests and Targets
-- Episode and guest editing
-- AI interview preparation and revision
-- Google Calendar and Opus integrations are present architecturally but intentionally not connected yet
-- Server-side environment variables for future integrations
+- Episode and guest editing with browser persistence
+- AI interview preparation and revision via `/api/prep`
+- Google Calendar interview sync via `/api/calendar` and `/api/calendar/health`
+- StreamYard links are extracted from matching Google Calendar events
+- OpusClip remains a separate integration to be connected later
+- vidIQ is being handled as a separate server-side integration so the deployed app does not depend on a ChatGPT-only OAuth session
 
 ## Environment variables
 
@@ -34,3 +36,5 @@ Build command: `npm run build`
 Publish directory: `dist`
 
 Functions directory: `netlify/functions`
+
+Connect the GitHub repository to Netlify on the `main` branch so every push automatically deploys a new version.
